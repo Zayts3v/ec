@@ -14,57 +14,52 @@ max_msg_size = 9999
 
 class Receiver(object):
 
-    def __init__(self, cnt, addr=None, salt=None, iv=None):
+    def __init__(self, cnt, addr=None):
 
         self.id = cnt
         self.addr = addr
         self.msg_cnt = 0
-        self.salt = salt
         self.backend = default_backend()
 
     def process(self, msg):
 
-        if (self.msg_cnt == 0):
 
-            self.salt = msg[:16]
+        salt = msg[:16]
 
-            new_msg = b"Salt recebido"
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=64,
+            salt=salt,
+            iterations=100000,
+            backend=self.backend
+        )
 
+        print("Intruduza password para ler a mensagem recebida:")
+        info = input()
+        password = info.encode('utf-8')
+
+        fkey = kdf.derive(password)
+
+        key  = fkey[:32]
+        kmac = fkey[32:]
+
+        mac = hmac.new(kmac, key, hashlib.sha256).digest()
+
+        if (mac == msg[32:64]):
+
+            iv = msg[16:32]
+            cipher = Cipher(algorithms.AES(key), modes.GCM(iv), backend=self.backend)
+
+            decryptor = cipher.decryptor()
+            mensagem = decryptor.update(msg[64:])
+
+            print("Mensagem recebida:")
+            print(mensagem.decode('utf-8'))
+
+            new_msg = b"Mensagem recebida"
         else:
-            kdf = PBKDF2HMAC(
-                algorithm=hashes.SHA256(),
-                length=64,
-                salt=self.salt,
-                iterations=100000,
-                backend=self.backend
-            )
-
-            print("Intruduza password para ler a mensagem recebida:")
-            info = input()
-            password = info.encode('utf-8')
-
-            fkey = kdf.derive(password)
-
-            key  = fkey[:32]
-            kmac = fkey[32:]
-
-            mac = hmac.new(kmac, key, hashlib.sha256).digest()
-
-            if (mac == msg[16:48]):
-
-                iv = msg[:16]
-                cipher = Cipher(algorithms.AES(key), modes.GCM(iv), backend=self.backend)
-
-                decryptor = cipher.decryptor()
-                mensagem = decryptor.update(msg[48:])
-
-                print("Mensagem recebida:")
-                print(mensagem.decode('utf-8'))
-
-                new_msg = b"Mensagem recebida"
-            else:
-                print("Password errada!")
-                new_msg = b"Algo correu mal"
+            print("Password errada!")
+            new_msg = b"Algo correu mal"
 
         self.msg_cnt += 1
         return new_msg if len(new_msg)>0 else None

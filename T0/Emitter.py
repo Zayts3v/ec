@@ -18,48 +18,44 @@ class Emitter:
 
         self.sckt = sckt
         self.msg_cnt = 0
-        self.salt = os.urandom(16)
         self.backend = default_backend()
 
     def process(self, msg=b""):
 
-        if (self.msg_cnt == 0):
+        salt = os.urandom(16)
 
-            new_msg = self.salt
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=64,
+            salt=salt,
+            iterations=100000,
+            backend=self.backend
+        )
 
-        else:
-            kdf = PBKDF2HMAC(
-                algorithm=hashes.SHA256(),
-                length=64,
-                salt=self.salt,
-                iterations=100000,
-                backend=self.backend
-            )
+        print("Para enviar nova mensagem intruduza password:")
+        info = input()
+        password = info.encode('utf-8')
 
-            print("Para enviar nova mensagem intruduza password:")
-            info = input()
-            password = info.encode('utf-8')
+        fkey = kdf.derive(password)
 
-            fkey = kdf.derive(password)
+        key  = fkey[:32]
+        kmac = fkey[32:]
 
-            key  = fkey[:32]
-            kmac = fkey[32:]
+        mac = hmac.new(kmac, key, hashlib.sha256).digest()
 
-            mac = hmac.new(kmac, key, hashlib.sha256).digest()
+        iv = os.urandom(16)
+        cipher = Cipher(algorithms.AES(key), modes.GCM(iv), backend=self.backend)
+        encryptor = cipher.encryptor()
 
-            iv = os.urandom(16)
-            cipher = Cipher(algorithms.AES(key), modes.GCM(iv), backend=self.backend)
-            encryptor = cipher.encryptor()
+        print("Mensagem a enviar:")
+        data = input()
+        message = data.encode('utf-8')
 
-            print("Mensagem a enviar:")
-            data = input()
-            message = data.encode('utf-8')
+        ct = encryptor.update(message) + encryptor.finalize()
 
-            ct = encryptor.update(message) + encryptor.finalize()
+        new_msg = salt + iv + mac + ct
 
-            new_msg = iv + mac + ct
-
-            print("Mensagem enviada!\n")
+        print("Mensagem enviada!\n")
 
         self.msg_cnt += 1
         return new_msg if len(new_msg)>0 else None
