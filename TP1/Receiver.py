@@ -1,12 +1,18 @@
-import asyncio
-import base64
 import os
-import hmac
+import asyncio
+import socket
+import base64
 import hashlib
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.asymmetric import dh
+from cryptography.hazmat.primitives.serialization import Encoding
+from cryptography.hazmat.primitives.serialization import ParameterFormat
+from cryptography.hazmat.primitives.serialization import PublicFormat
+from cryptography.hazmat.primitives.serialization import load_der_parameters
+from cryptography.hazmat.primitives.serialization import load_der_public_key
 
 conn_cnt = 0
 conn_port = 8888
@@ -14,67 +20,76 @@ max_msg_size = 9999
 
 class Receiver(object):
 
-    def __init__(self, cnt, addr=None):
+    def __init__(self, cnt, parameters, addr=None):
 
         self.id = cnt
         self.addr = addr
         self.msg_cnt = 0
-        self.backend = default_backend()
+        self.parameters = parameters
+        self.server_private_key = None
+        self.public_key = None
+        self.shared_key = None
 
     def process(self, msg):
+        if (self.msg_cnt == 0):
+            print('READY!')
 
+            self.server_private_key = self.parameters.generate_private_key()
+            self.public_key         = self.server_private_key.public_key()
 
-        salt = msg[:16]
+            new  = self.parameters.parameter_bytes(Encoding.DER, ParameterFormat.PKCS3)
+            new2 = self.public_key.public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
 
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=64,
-            salt=salt,
-            iterations=100000,
-            backend=self.backend
-        )
+            new_msg = {
+                "txt1": new,
+                "txt2": new2
+            }
 
-        print("Intruduza password para ler a mensagem recebida:")
-        info = input()
-        password = info.encode('utf-8')
+            msg = new_msg
 
-        fkey = kdf.derive(password)
+            print('AQUI!')
+            self.msg_cnt += 1
+        elif (self.msg_cnt == 1):
 
-        key  = fkey[:32]
-        kmac = fkey[32:]
+            client_key = load_der_public_key(msg["ct"], backend=default_backend())
+            self.shared_key = self.server_private_key.exchange(client_key)
+            msg["ct"] = "Done!"
+            self.msg_cnt += 1
 
-        mac = hmac.new(kmac, key, hashlib.sha256).digest()
+        else:
 
-        if (mac == msg[32:64]):
+            if len(self.shared_key) not in (16, 24, 32):
+                key = hashlib.sha256(self.shared_key).digest()
 
-            iv = msg[16:32]
-            cipher = Cipher(algorithms.AES(key), modes.GCM(iv), backend=self.backend)
+            nonce = msg["nonce"]
+
+            cipher = Cipher(algorithms.AES(key), modes.GCM(nonce), backend=self.backend)
 
             decryptor = cipher.decryptor()
-            mensagem = decryptor.update(msg[64:])
+            mensagem = decryptor.update(msg["ct"])
 
-            print("Mensagem recebida:")
-            print(mensagem.decode('utf-8'))
+            print('%d : %r' % (self.id,plaintext.decode('utf-8')))
+            msg["ct"] = plaintext
 
-            new_msg = b"Mensagem recebida"
-        else:
-            print("Password errada!")
-            new_msg = b"Algo correu mal"
+            self.msg_cnt += 1
 
-        self.msg_cnt += 1
-        return new_msg if len(new_msg)>0 else None
+        return msg if len(msg)>0 else None
 
 @asyncio.coroutine
 def handle_echo(reader, writer):
     global conn_cnt
     conn_cnt +=1
     addr = writer.get_extra_info('peername')
-    srvwrk = Receiver(conn_cnt, addr)
+    parameters = dh.generate_parameters(generator=2, key_size=2048, backend=default_backend())
+    srvwrk = Receiver(conn_cnt,parameters,addr)
     data = yield from reader.read(max_msg_size)
+    msg = {
+            "txt": data
+        }
     while True:
         if not data: continue
-        if data[:1]==b'\n': break
-        data = srvwrk.process(data)
+        if data==b'\n': break
+        msg["data"] = srvwrk.process(msg)
         if not data: break
         writer.write(data)
         yield from writer.drain()
