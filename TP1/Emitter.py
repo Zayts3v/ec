@@ -32,15 +32,19 @@ class Emitter:
 
         if (self.msg_cnt == 0):
 
-            new_msg = msg
+            new_msg = bytes("Hello".encode('utf-8'))
             self.msg_cnt += 1
 
         elif (self.msg_cnt == 1):
 
-            print(msg)
+            print(msg.decode())
 
-            parameters        = load_der_parameters(msg["txt1"], backend=default_backend())
-            server_public_key = load_der_public_key(msg["txt2"], backend=default_backend())
+            msg = msg.decode()
+            txt1 = msg.get("txt1")
+            txt2 = msg["txt2"]
+
+            parameters        = load_der_parameters(txt1, backend=default_backend())
+            server_public_key = load_der_public_key(txt2, backend=default_backend())
 
             self.client_private_key = parameters.generate_private_key()
             self.client_public_key  = self.client_private_key.public_key()
@@ -94,18 +98,12 @@ def tcp_echo_emitter(loop=None):
                                                         conn_port, loop=loop)
     addr = writer.get_extra_info('peername')
     emitter = Emitter(addr)
-    msg = {
-        "txt": emitter.process()
-    }
+    msg = emitter.process()
     while msg:
-        txt1 = msg["txt"]
-        writer.write(bytes(str(txt1).encode('utf-8')))
-        txt = yield from reader.read(max_msg_size)
-        msg = {
-            "txt": txt
-        }
-        if msg :
-            msg["txt"] = emitter.process(msg)
+        writer.write(bytes(str(msg).encode('utf-8')))
+        msg = yield from reader.read(max_msg_size)
+        if msg:
+            msg = emitter.process(msg)
         else:
             break
     writer.write(b'\n')

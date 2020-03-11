@@ -47,8 +47,6 @@ class Receiver(object):
 
             msg = new_msg
 
-            print(new_msg["txt1"])
-
             print('AQUI!')
             self.msg_cnt += 1
         elif (self.msg_cnt == 1):
@@ -85,15 +83,12 @@ def handle_echo(reader, writer):
     parameters = dh.generate_parameters(generator=2, key_size=2048, backend=default_backend())
     srvwrk = Receiver(conn_cnt,parameters,addr)
     data = yield from reader.read(max_msg_size)
-    msg = {
-            "txt": data
-        }
     while True:
         if not data: continue
         if data==b'\n': break
-        msg["data"] = srvwrk.process(msg)
+        data = srvwrk.process(data)
         if not data: break
-        writer.write(data)
+        writer.write(bytes(str(data).encode('utf-8')))
         yield from writer.drain()
         data = yield from reader.read(max_msg_size)
     print("[%d]" % srvwrk.id)
