@@ -3,6 +3,7 @@ import asyncio
 import socket
 import base64
 import hashlib
+from random import randrange
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -51,7 +52,14 @@ class Emitter:
 
             self.msg_cnt +=1
         else:
-            nonce = os.urandom(32)
+            inicial = os.urandom(512)
+            i = 0
+            nonce[128]
+
+            while i < 128:
+                random_index = randrange(len(inicial))
+                nounce[i] = inicial[random_index]
+                i+=1
 
             if len(self.shared_key) not in (16, 24, 32):
                 key = hashlib.sha256(self.shared_key).digest()

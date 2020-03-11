@@ -47,6 +47,8 @@ class Receiver(object):
 
             msg = new_msg
 
+            print(new_msg["txt1"])
+
             print('AQUI!')
             self.msg_cnt += 1
         elif (self.msg_cnt == 1):
