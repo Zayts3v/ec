@@ -4,6 +4,7 @@ import socket
 import base64
 import hashlib
 import ast
+import numpy as np
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
@@ -55,9 +56,9 @@ class Receiver(object):
 
             msg_dict = ast.literal_eval(msg)
 
-            client_key = load_der_public_key(msg_dict["ct"], backend=default_backend())
+            client_key = load_der_public_key(msg_dict['ct'], backend=default_backend())
             self.shared_key = self.server_private_key.exchange(client_key)
-            msg_dict["ct"] = "Done!"
+            msg_dict['ct'] = "Done!"
 
             msg = msg_dict
 
@@ -68,20 +69,19 @@ class Receiver(object):
 
             msg_dict = ast.literal_eval(msg)
 
-            print(msg_dict)
-
             if len(self.shared_key) not in (16, 24, 32):
                 key = hashlib.sha256(self.shared_key).digest()
 
-            nonce = msg_dict["nonce"]
+            nonce = msg_dict['nonce']
+            nounce = np.asarray(nonce)
 
-            cipher = Cipher(algorithms.AES(key), modes.GCM(nonce), backend=default_backend())
+            cipher = Cipher(algorithms.AES(key), modes.GCM(nounce), backend=default_backend())
 
             decryptor = cipher.decryptor()
-            mensagem = decryptor.update(msg_dict["ct"])
+            mensagem = decryptor.update(msg_dict['ct'])
 
-            print('%d : %r' % (self.id,plaintext.decode('utf-8')))
-            msg_dict["ct"] = plaintext
+            print('%d : %r' % (self.id, mensagem.decode('utf-8')))
+            msg_dict['ct'] = mensagem
 
             msg = msg_dict
 

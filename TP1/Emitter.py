@@ -58,12 +58,8 @@ class Emitter:
             self.msg_cnt +=1
         else:
             inicial = os.urandom(512)
-            i = 0
             nonce = random.choices(inicial, k=128)
-
             nounce = np.asarray(nonce)
-
-            print(len(nounce))
 
             if len(self.shared_key) not in (16, 24, 32):
                 key = hashlib.sha256(self.shared_key).digest()
@@ -80,9 +76,10 @@ class Emitter:
             print('Received (%d): %r' % (self.msg_cnt,data))
 
             new_msg = {
-                "nonce": nounce,
-                "ct": ct
+               "nonce": nonce,
+               "ct": ct
             }
+
             self.msg_cnt +=1
 
         print("Mensagem enviada!\n")
