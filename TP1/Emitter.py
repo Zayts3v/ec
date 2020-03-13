@@ -3,7 +3,9 @@ import asyncio
 import socket
 import base64
 import hashlib
-from random import randrange
+import ast
+import random
+import numpy as np
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -13,7 +15,6 @@ from cryptography.hazmat.primitives.serialization import ParameterFormat
 from cryptography.hazmat.primitives.serialization import PublicFormat
 from cryptography.hazmat.primitives.serialization import load_der_parameters
 from cryptography.hazmat.primitives.serialization import load_der_public_key
-
 
 conn_port = 8888
 max_msg_size = 9999
@@ -37,11 +38,11 @@ class Emitter:
 
         elif (self.msg_cnt == 1):
 
-            print(msg.decode())
-
             msg = msg.decode()
-            txt1 = msg.get("txt1")
-            txt2 = msg["txt2"]
+
+            msg_dict = ast.literal_eval(msg)
+            txt1 = msg_dict.get("txt1")
+            txt2 = msg_dict['txt2']
 
             parameters        = load_der_parameters(txt1, backend=default_backend())
             server_public_key = load_der_public_key(txt2, backend=default_backend())
@@ -58,29 +59,28 @@ class Emitter:
         else:
             inicial = os.urandom(512)
             i = 0
-            nonce[128]
+            nonce = random.choices(inicial, k=128)
 
-            while i < 128:
-                random_index = randrange(len(inicial))
-                nounce[i] = inicial[random_index]
-                i+=1
+            nounce = np.asarray(nonce)
+
+            print(len(nounce))
 
             if len(self.shared_key) not in (16, 24, 32):
                 key = hashlib.sha256(self.shared_key).digest()
 
-            cipher = Cipher(algorithms.AES(key), modes.GCM(nonce), backend=self.backend)
+            cipher = Cipher(algorithms.AES(key), modes.GCM(nounce), backend=default_backend())
             encryptor = cipher.encryptor()
 
+            print('Input message to send (empty to finish)')
             data = input()
             message = data.encode('utf-8')
 
             ct = encryptor.update(message) + encryptor.finalize()
 
             print('Received (%d): %r' % (self.msg_cnt,data))
-            print('Input message to send (empty to finish)')
 
             new_msg = {
-                "nonce": nonce,
+                "nonce": nounce,
                 "ct": ct
             }
             self.msg_cnt +=1

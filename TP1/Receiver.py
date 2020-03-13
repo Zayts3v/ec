@@ -3,6 +3,7 @@ import asyncio
 import socket
 import base64
 import hashlib
+import ast
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
@@ -47,32 +48,46 @@ class Receiver(object):
 
             msg = new_msg
 
-            print('AQUI!')
             self.msg_cnt += 1
         elif (self.msg_cnt == 1):
 
-            client_key = load_der_public_key(msg["ct"], backend=default_backend())
-            self.shared_key = self.server_private_key.exchange(client_key)
-            msg["ct"] = "Done!"
-            self.msg_cnt += 1
+            msg = msg.decode()
 
+            msg_dict = ast.literal_eval(msg)
+
+            client_key = load_der_public_key(msg_dict["ct"], backend=default_backend())
+            self.shared_key = self.server_private_key.exchange(client_key)
+            msg_dict["ct"] = "Done!"
+
+            msg = msg_dict
+
+            self.msg_cnt += 1
         else:
+
+            msg = msg.decode()
+
+            msg_dict = ast.literal_eval(msg)
+
+            print(msg_dict)
 
             if len(self.shared_key) not in (16, 24, 32):
                 key = hashlib.sha256(self.shared_key).digest()
 
-            nonce = msg["nonce"]
+            nonce = msg_dict["nonce"]
 
-            cipher = Cipher(algorithms.AES(key), modes.GCM(nonce), backend=self.backend)
+            cipher = Cipher(algorithms.AES(key), modes.GCM(nonce), backend=default_backend())
 
             decryptor = cipher.decryptor()
-            mensagem = decryptor.update(msg["ct"])
+            mensagem = decryptor.update(msg_dict["ct"])
 
             print('%d : %r' % (self.id,plaintext.decode('utf-8')))
-            msg["ct"] = plaintext
+            msg_dict["ct"] = plaintext
+
+            msg = msg_dict
 
             self.msg_cnt += 1
 
+        print('NEXT!')
         return msg if len(msg)>0 else None
 
 @asyncio.coroutine
