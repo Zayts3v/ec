@@ -7,9 +7,9 @@ import ast
 import random
 import numpy as np
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.asymmetric import dh
+from cryptography.hazmat.primitives.asymmetric import dh, dsa
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.hazmat.primitives.serialization import ParameterFormat
 from cryptography.hazmat.primitives.serialization import PublicFormat
@@ -41,15 +41,24 @@ class Emitter:
             msg = msg.decode()
 
             msg_dict = ast.literal_eval(msg)
-            txt1 = msg_dict.get("txt1")
-            txt2 = msg_dict['txt2']
+            parameters_dh  = msg_dict['parameters_DH']
+            public_key_DH  = msg_dict['public_key_DH']
+            public_key_DSA = msg_dict['public_key_DSA']
+            sig = msg_dict['signature']
 
-            parameters        = load_der_parameters(txt1, backend=default_backend())
-            server_public_key = load_der_public_key(txt2, backend=default_backend())
+            parameters_DH     = load_der_parameters(parameters_dh, backend=default_backend())
+            server_public_key = load_der_public_key(public_key_DH, backend=default_backend())
+            server_dsa_pub_key = load_der_public_key(public_key_DSA, backend=default_backend())
 
-            self.client_private_key = parameters.generate_private_key()
+            self.client_private_key = parameters_DH.generate_private_key()
             self.client_public_key  = self.client_private_key.public_key()
             self.shared_key         = self.client_private_key.exchange(server_public_key)
+
+            signature = server_dsa_pub_key.verify(
+                sig,
+                public_key_DH,
+                hashes.SHA256()
+            )
 
             new_msg = {
                 "ct": self.client_public_key.public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
@@ -64,6 +73,8 @@ class Emitter:
             if len(self.shared_key) not in (16, 24, 32):
                 key = hashlib.sha256(self.shared_key).digest()
 
+            mac = hmac.HMAC(key,hashes.SHA256(),default_backend())
+
             cipher = Cipher(algorithms.AES(key), modes.CFB(nounce), backend=default_backend())
             encryptor = cipher.encryptor()
 
@@ -77,6 +88,7 @@ class Emitter:
 
             new_msg = {
                "nonce": nonce,
+               "mac": mac.finalize(),
                "ct": ct
             }
 

@@ -6,10 +6,10 @@ import hashlib
 import ast
 import numpy as np
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.asymmetric import dh
+from cryptography.hazmat.primitives.asymmetric import dh, dsa
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.hazmat.primitives.serialization import ParameterFormat
 from cryptography.hazmat.primitives.serialization import PublicFormat
@@ -22,12 +22,13 @@ max_msg_size = 9999
 
 class Receiver(object):
 
-    def __init__(self, cnt, parameters, addr=None):
+    def __init__(self, cnt, parameters_DH, parameters_DSA, addr=None):
 
         self.id = cnt
         self.addr = addr
         self.msg_cnt = 0
-        self.parameters = parameters
+        self.parameters_DH = parameters_DH
+        self.parameters_DSA = parameters_DSA
         self.server_private_key = None
         self.public_key = None
         self.shared_key = None
@@ -36,15 +37,26 @@ class Receiver(object):
         if (self.msg_cnt == 0):
             print('READY!')
 
-            self.server_private_key = self.parameters.generate_private_key()
+            dsa_private_key = self.parameters_DSA.generate_private_key()
+            dsa_public_key  = dsa_private_key.public_key()
+
+            self.server_private_key = self.parameters_DH.generate_private_key()
             self.public_key         = self.server_private_key.public_key()
 
-            new  = self.parameters.parameter_bytes(Encoding.DER, ParameterFormat.PKCS3)
-            new2 = self.public_key.public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+            param_dh  = self.parameters_DH.parameter_bytes(Encoding.DER, ParameterFormat.PKCS3)
+            pubK_dh   = self.public_key.public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+            pubK_dsa  = dsa_public_key.public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+
+            sig = dsa_private_key.sign(
+                pubK_dh,
+                hashes.SHA256()
+            )
 
             new_msg = {
-                "txt1": new,
-                "txt2": new2
+                "parameters_DH": param_dh,
+                "public_key_DH": pubK_dh,
+                "public_key_DSA": pubK_dsa,
+                "signature": sig
             }
 
             msg = new_msg
@@ -72,22 +84,30 @@ class Receiver(object):
             if len(self.shared_key) not in (16, 24, 32):
                 key = hashlib.sha256(self.shared_key).digest()
 
-            nonce = msg_dict['nonce']
-            nounce = np.asarray(nonce)
+            mac = hmac.HMAC(key,hashes.SHA256(),default_backend())
+            mac = mac.finalize()
 
-            cipher = Cipher(algorithms.AES(key), modes.CFB(nounce), backend=default_backend())
+            if (mac == msg_dict['mac']):
 
-            decryptor = cipher.decryptor()
-            mensagem = decryptor.update(msg_dict['ct'])
+                nonce = msg_dict['nonce']
+                nounce = np.asarray(nonce)
 
-            print('%d : %r' % (self.id, mensagem.decode('utf-8')))
-            msg_dict['ct'] = mensagem
+                cipher = Cipher(algorithms.AES(key), modes.CFB(nounce), backend=default_backend())
 
-            msg = msg_dict
+                decryptor = cipher.decryptor()
+                mensagem = decryptor.update(msg_dict['ct'])
+
+                print('%d : %r' % (self.id, mensagem.decode('utf-8')))
+                msg_dict['ct'] = mensagem
+
+                msg = msg_dict
+
+            else:
+                print("Erro no MAC!")    
 
             self.msg_cnt += 1
 
-        print('NEXT!')
+        print('Next Step!')
         return msg if len(msg)>0 else None
 
 @asyncio.coroutine
@@ -95,8 +115,9 @@ def handle_echo(reader, writer):
     global conn_cnt
     conn_cnt +=1
     addr = writer.get_extra_info('peername')
-    parameters = dh.generate_parameters(generator=2, key_size=2048, backend=default_backend())
-    srvwrk = Receiver(conn_cnt,parameters,addr)
+    parameters_DH = dh.generate_parameters(generator=2, key_size=1024, backend=default_backend())
+    parameters_DSA = dsa.generate_parameters(key_size=1024,backend=default_backend())
+    srvwrk = Receiver(conn_cnt,parameters_DH,parameters_DSA,addr)
     data = yield from reader.read(max_msg_size)
     while True:
         if not data: continue
