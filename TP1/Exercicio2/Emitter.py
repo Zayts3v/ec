@@ -6,12 +6,11 @@ import hashlib
 import ast
 import random
 import numpy as np
-import secrets
-from tinyec import registry
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.asymmetric import dh
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.hazmat.primitives.serialization import ParameterFormat
 from cryptography.hazmat.primitives.serialization import PublicFormat
@@ -43,54 +42,58 @@ class Emitter:
             msg = msg.decode()
             msg_dict = ast.literal_eval(msg)
 
-            print("aqui1")
+            pub_key = msg_dict['pubKey']
 
-            curve = msg_dict['curve']
-            server_public_key = msg_dict['pub_key']
-            print("aqui2")
+            server_public_key = load_der_public_key(pub_key, backend=default_backend())
 
-            self.client_private_key = secrets.randbelow(curve.field.n)
-            self.client_public_key = self.client_private_key * curve.g
-            self.shared_key = self.client_private_key + server_public_key
+            self.client_private_key = ec.generate_private_key(
+                                            ec.SECP256K1(), default_backend())
+            self.client_public_key = self.client_private_key.public_key()
+            self.shared_key = self.client_private_key.exchange(ec.ECDH(), server_public_key)
 
             key = os.urandom(32)
-            nounce = os.urandom(32)
+            nounce = os.urandom(12)
+
             cip = ChaCha20Poly1305(key)
 
             print('Input message to send (empty to finish)')
             data = input()
             message = data.encode('utf-8')
 
-            print("aqui3")           
-            ciphertext = cip.encrypt(nonce,message)
+            ciphertext = cip.encrypt(nounce,message,None)
 
-            signature = Ecdsa.sign(message,privateKey)
+            signature = self.client_private_key.sign(
+                                            ciphertext,
+                                            ec.ECDSA(hashes.SHA256()))
 
             new_msg = {
                 "nounce": nounce,
                 "key": key,
                 "ct": ciphertext,
                 "sign": signature,
-                "pub_key": self.server_public_key
+                "pub_key": self.client_public_key.public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
             }
 
             self.msg_cnt +=1
         else:
             key = os.urandom(32)
-            nounce = os.urandom(32)
-            cip = ChaCha20Poly1305(self.shared_key)
+            nounce = os.urandom(12)
+            
+            cip = ChaCha20Poly1305(key)
 
             print('Input message to send (empty to finish)')
             data = input()
             message = data.encode('utf-8')
 
-            ciphertext = cip.encrypt(nonce,message)
+            ciphertext = cip.encrypt(nounce,message,None)
 
-            signature = Ecdsa.sign(message,privateKey)
+            signature = self.client_private_key.sign(
+                                            ciphertext,
+                                            ec.ECDSA(hashes.SHA256()))
 
             new_msg = {
-                "key": key,
                 "nounce": nounce,
+                "key": key,
                 "ct": ciphertext,
                 "sign": signature
             }
