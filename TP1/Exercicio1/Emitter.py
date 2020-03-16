@@ -58,13 +58,13 @@ class Emitter:
             self.msg_cnt +=1
         else:
             inicial = os.urandom(512)
-            nonce = random.choices(inicial, k=128)
+            nonce = random.choices(inicial, k=16)
             nounce = np.asarray(nonce)
 
             if len(self.shared_key) not in (16, 24, 32):
                 key = hashlib.sha256(self.shared_key).digest()
 
-            cipher = Cipher(algorithms.AES(key), modes.GCM(nounce), backend=default_backend())
+            cipher = Cipher(algorithms.AES(key), modes.CFB(nounce), backend=default_backend())
             encryptor = cipher.encryptor()
 
             print('Input message to send (empty to finish)')

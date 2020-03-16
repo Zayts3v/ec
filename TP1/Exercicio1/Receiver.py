@@ -75,7 +75,7 @@ class Receiver(object):
             nonce = msg_dict['nonce']
             nounce = np.asarray(nonce)
 
-            cipher = Cipher(algorithms.AES(key), modes.GCM(nounce), backend=default_backend())
+            cipher = Cipher(algorithms.AES(key), modes.CFB(nounce), backend=default_backend())
 
             decryptor = cipher.decryptor()
             mensagem = decryptor.update(msg_dict['ct'])
