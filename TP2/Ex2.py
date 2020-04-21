@@ -42,6 +42,7 @@ def generate_p_q(L, N):
 
 
 def generate_g(p, q):
+	#g = h^exp mod p
     while True:
         h = randrange(2, p - 1)
         exp = xmpz((p - 1) // q)
