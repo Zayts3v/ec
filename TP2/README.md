@@ -5,10 +5,12 @@
 Este trabalho é uma iniciação aos corpos finitos primos, às curvas elípticas sobre tais corpos  e aos esquemas criptográficos neles baseados (RSA , DSA e ECDSA) usando o SageMath.
 
 1. Construir uma classe Python que implemente um esquema KEM- RSA-OAEP. A classe deve:
+
         1. Inicializar cada instância recebendo como parâmetro obrigatório o parâmetro de segurança (tamanho em bits do módulo RSA-OAEP) e gerando as chaves pública e privada.
         2. Conter funções para encapsulamento e revelação da chave gerada.
         3. Construir,  a partir deste KEM e usando a transformação de Fujisaki-Okamoto, um PKE que seja IND-CCA seguro.
 2. Construir uma classe Python que implemente o DSA. A implementação deve:
+
         1. A iniciação,  receber como parâmetros o tamanho  dos primos p e q.
         2. Conter funções para assinar digitalmente e verificar a assinatura.
 3. Construir uma classe Python que implemente o ECDSA usando uma das curvas elípticas primas definidas no FIPS186-4  (escolhida  na iniciação da classe).
