@@ -8,6 +8,6 @@
 
 ### [TP2](https://github.com/Zayts3v/ec/tree/master/TP2) - Esquemas criptográficos RSA, DSA e ECDSA
 
-### TP3
+### [TP3](https://github.com/Zayts3v/ec/tree/master/TP3) - NTRU-Prime e NewHope
 
 ### TP4
